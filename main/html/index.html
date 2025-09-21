@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 串口调试工具</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            color: #333;
+            line-height: 1.6;
+            /* 移除禁止滚动的设置 */
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            /* 允许容器根据内容扩展 */
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin: 0 0 15px 0;
+            font-size: 1.6em;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            margin-bottom: 10px;
+            color: #666;
+        }
+        
+        /* 状态条保持水平显示 */
+        .status-bar {
+            background-color: #e9f5ff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            font-size: 0.85em;
+            color: #336699;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            align-items: center;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        
+        .status-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-connected {
+            background-color: #4CAF50;
+        }
+        
+        .status-disconnected {
+            background-color: #f44336;
+        }
+        
+        /* 日志区域 - 保持大尺寸但允许页面滚动 */
+        .log-container {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            height: 550px; /* 桌面端基础高度 */
+            overflow-y: auto;
+            margin-bottom: 15px;
+            background-color: #0f1116;
+            padding: 12px;
+            position: relative;
+            /* 移除flex-grow，避免强制占据空间 */
+        }
+        
+        .log-controls {
+            position: sticky;
+            top: 0;
+            background-color: #1e2129;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .log-filter {
+            display: flex;
+            gap: 6px;
+            font-size: 0.8em;
+        }
+        
+        .filter-btn {
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .filter-btn.active {
+            background-color: #3a3f50;
+            color: #fff;
+        }
+        
+        #log {
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .log-line {
+            margin: 1px 0;
+            padding: 1px 0;
+        }
+        
+        .log-sent {
+            color: #4dabf5;
+        }
+        
+        .log-received {
+            color: #00ff00;
+        }
+        
+        .log-error {
+            color: #ff6b6b;
+        }
+        
+        .log-system {
+            color: #ffd166;
+        }
+        
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px; /* 增加底部间距，确保最后元素可见 */
+        }
+        
+        .serial-settings {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+        
+        .baudrate-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        label {
+            font-weight: 500;
+            color: #444;
+            font-size: 0.9em;
+        }
+        
+        #baudrate {
+            padding: 7px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            flex-grow: 1;
+            min-width: 120px;
+            font-size: 0.85em;
+        }
+        
+        .data-format {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 5px 0;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.9em;
+        }
+        
+        .send-area {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .send-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+        }
+        
+        .line-ending {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        #line-ending {
+            padding: 4px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            font-size: 0.8em;
+        }
+        
+        #send-input {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            min-height: 70px;
+            resize: none;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            transition: border 0.3s;
+        }
+        
+        #send-input:focus {
+            border-color: #2196F3;
+            outline: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+        
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            flex-grow: 1;
+            min-width: 80px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        #send-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        #clear-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        #save-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        #auto-scroll {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: #777;
+            display: none;
+        }
+        
+        /* 平板设备适配 */
+        @media (max-width: 768px) {
+            .log-container {
+                height: 500px;
+            }
+        }
+        
+        /* 手机设备适配 - 重点优化 */
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+                /* 移除固定高度，允许内容扩展 */
+            }
+            
+            h1 {
+                font-size: 1.4em;
+                margin-bottom: 10px;
+                padding-bottom: 8px;
+            }
+            
+            .header-info {
+                margin-bottom: 8px;
+                font-size: 0.75em;
+            }
+            
+            /* 状态条保持水平紧凑排列 */
+            .status-bar {
+                padding: 6px 8px;
+                margin-bottom: 10px;
+                font-size: 0.8em;
+                gap: 5px 8px;
+            }
+            
+            /* 手机端日志区域保持大尺寸但允许页面滚动 */
+            .log-container {
+                height: 450px; /* 固定高度但允许页面整体滚动 */
+                padding: 8px;
+                margin-bottom: 10px;
+            }
+            
+            .log-controls {
+                padding: 4px 6px;
+                margin-bottom: 6px;
+                gap: 5px;
+            }
+            
+            .log-filter {
+                gap: 4px;
+                font-size: 0.75em;
+            }
+            
+            .serial-settings {
+                gap: 8px;
+            }
+            
+            .baudrate-selector, .data-format {
+                min-width: 100%;
+            }
+            
+            .send-options {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .button-group {
+                gap: 6px;
+            }
+            
+            button {
+                padding: 7px;
+                font-size: 0.85em;
+                min-width: 0;
+            }
+            
+            #send-input {
+                min-height: 60px;
+                max-height: 150px; /* 允许输入框更高一些 */
+            }
+        }
+        
+        /* 小屏手机额外优化 */
+        @media (max-width: 360px) {
+            .log-container {
+                height: 400px;
+            }
+            
+            .status-item {
+                font-size: 0.75em;
+            }
+            
+            .log-line {
+                font-size: 0.85em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>UART调试工具</h1>
+        
+        <div class="header-info">
+            <div>版本: 1.2.0</div>
+            <div>作者: mkk</div>
+        </div>
+        
+        <!-- 状态条保持水平显示 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-icon status-disconnected" id="status-icon"></span>
+                连接: <span id="connection-status">未连接</span>
+            </div>
+            <div class="status-item">
+                波特率: <span id="current-baudrate">115200</span>
+            </div>
+            <div class="status-item">
+                接收: <span id="receive-count">0</span>
+            </div>
+            <div class="status-item">
+                发送: <span id="send-count">0</span>
+            </div>
+        </div>
+        
+        <!-- 日志区域（黑框）保持大尺寸 -->
+        <div class="log-container">
+            <div class="log-controls">
+                <div class="log-filter">
+                    <button class="filter-btn active" data-filter="all">全部</button>
+                    <button class="filter-btn" data-filter="sent">发送</button>
+                    <button class="filter-btn" data-filter="received">接收</button>
+                    <button class="filter-btn" data-filter="error">错误</button>
+                </div>
+                <div id="auto-scroll">
+                    <input type="checkbox" id="auto-scroll-checkbox" checked>
+                    <label for="auto-scroll-checkbox">自动滚动</label>
+                </div>
+            </div>
+            <div id="log"></div>
+        </div>
+        
+        <div class="control-panel">
+            <div class="serial-settings">
+                <div class="baudrate-selector">
+                    <label for="baudrate">波特率:</label>
+                    <select id="baudrate">
+                        <option value="2400">2400</option>
+                        <option value="4800">4800</option>
+                        <option value="9600">9600</option>
+                        <option value="19200">19200</option>
+                        <option value="38400">38400</option>
+                        <option value="57600">57600</option>
+                        <option value="115200" selected>115200</option>
+                        <option value="230400">230400</option>
+                        <option value="460800">460800</option>
+                        <option value="921600">921600</option>
+                    </select>
+                </div>
+                
+                <div class="data-format">
+                    <label>数据格式:</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="hex-receive">
+                            <label for="hex-receive">HEX接收</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="hex-send">
+                            <label for="hex-send">HEX发送</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="send-area">
+                <div class="send-options">
+                    <div class="line-ending">
+                        <label for="line-ending">行结束符:</label>
+                        <select id="line-ending">
+                            <option value="none">无</option>
+                            <option value="lf">LF (\n)</option>
+                            <option value="cr">CR (\r)</option>
+                            <option value="crlf" selected>CR+LF (\r\n)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <textarea id="send-input" placeholder="输入要发送的数据..."></textarea>
+                
+                <div class="button-group">
+                    <button id="send-btn">发送</button>
+                    <button id="clear-btn">清除</button>
+                    <button id="save-btn">保存</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            ESP32 串口调试工具 | 通过WebSocket与ESP32通信
+        </div>
+    </div>
+
+    <script>
+        let websocket;
+        const sendInput = document.getElementById('send-input');
+        const logElement = document.getElementById('log');
+        const connectionStatus = document.getElementById('connection-status');
+        const statusIcon = document.getElementById('status-icon');
+        const currentBaudrate = document.getElementById('current-baudrate');
+        const baudrateSelect = document.getElementById('baudrate');
+        const hexReceiveCheckbox = document.getElementById('hex-receive');
+        const hexSendCheckbox = document.getElementById('hex-send');
+        const receiveCountElement = document.getElementById('receive-count');
+        const sendCountElement = document.getElementById('send-count');
+        const autoScrollCheckbox = document.getElementById('auto-scroll-checkbox');
+        const lineEndingSelect = document.getElementById('line-ending');
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        
+        let receiveCount = 0;
+        let sendCount = 0;
+        let currentFilter = 'all';
+        
+        // 自动调整输入框高度
+        function adjustTextareaHeight() {
+            sendInput.style.height = 'auto';
+            // 手机端适当放宽输入框高度限制
+            const maxHeight = window.innerWidth <= 480 ? 150 : 300;
+            const newHeight = Math.min(Math.max(sendInput.scrollHeight, 60), maxHeight);
+            sendInput.style.height = newHeight + 'px';
+        }
+        
+        // 初始化时调整一次
+        adjustTextareaHeight();
+        // 输入时调整高度
+        sendInput.addEventListener('input', adjustTextareaHeight);
+        
+        // 窗口大小变化时重新调整
+        window.addEventListener('resize', adjustTextareaHeight);
+        
+        // 连接WebSocket
+        function connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUri = `${wsProtocol}//${window.location.host}/ws`;
+            
+            websocket = new WebSocket(wsUri);
+            
+            websocket.onopen = function(evt) {
+                connectionStatus.textContent = '已连接';
+                statusIcon.className = 'status-icon status-connected';
+                log('WebSocket 已连接', 'system');
+            };
+            
+            websocket.onclose = function(evt) {
+                connectionStatus.textContent = '已断开';
+                statusIcon.className = 'status-icon status-disconnected';
+                log(`WebSocket 已断开 (代码: ${evt.code}), 正在尝试重连...`, 'error');
+                
+                // 5秒后尝试重连
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            websocket.onmessage = function(evt) {
+                handleWebSocketMessage(evt);
+            };
+            
+            websocket.onerror = function(evt) {
+                log(`WebSocket 错误: ${JSON.stringify(evt)}`, 'error');
+            };
+        }
+        
+        // 处理接收到的消息
+        function handleWebSocketMessage(evt) {
+            try {
+                const data = JSON.parse(evt.data);
+                
+                if (data.type === 'serial_data') {
+                    receiveCount++;
+                    receiveCountElement.textContent = receiveCount;
+                    
+                    if (hexReceiveCheckbox.checked) {
+                        // HEX模式显示
+                        log(`[接收] HEX: ${data.value}`, 'received');
+                    } else {
+                        // 文本模式显示
+                        log(`[接收] ${data.value}`, 'received');
+                    }
+                } else if (data.type === 'baudrate_changed') {
+                    currentBaudrate.textContent = data.value;
+                    log(`波特率已设置为: ${data.value}`, 'system');
+                } else if (data.type === 'error') {
+                    log(`错误: ${data.value}`, 'error');
+                }
+            } catch (e) {
+                log(`解析消息错误: ${e}`, 'error');
+            }
+        }
+        
+        // 添加行结束符
+        function addLineEnding(text) {
+            const ending = lineEndingSelect.value;
+            switch(ending) {
+                case 'lf':
+                    return text + '\n';
+                case 'cr':
+                    return text + '\r';
+                case 'crlf':
+                    return text + '\r\n';
+                default:
+                    return text;
+            }
+        }
+        
+        // 发送数据
+        function sendData() {
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                log('未连接到服务器，无法发送数据', 'error');
+                return;
+            }
+            
+            let input = sendInput.value;
+            if (!input.trim()) return;
+            
+            // 添加行结束符
+            input = addLineEnding(input);
+            
+            let dataToSend;
+            let logMessage;
+            
+            if (hexSendCheckbox.checked) {
+                // 清除所有空格
+                const hexData = input.replace(/\s/g, '');
+                // 验证HEX格式
+                if (!/^[0-9A-Fa-f]*$/.test(hexData) || hexData.length % 2 !== 0) {
+                    log('无效的HEX格式，请输入偶数个十六进制字符', 'error');
+                    return;
+                }
+                
+                dataToSend = {
+                    type: 'hex',
+                    value: hexData
+                };
+                logMessage = `HEX: ${input}`;
+            } else {
+                // 文本模式发送
+                dataToSend = {
+                    type: 'text',
+                    value: input
+                };
+                logMessage = input;
+            }
+            
+            websocket.send(JSON.stringify(dataToSend));
+            log(`[发送] ${logMessage}`, 'sent');
+            sendCount++;
+            sendCountElement.textContent = sendCount;
+            
+            sendInput.value = '';
+            adjustTextareaHeight();
+        }
+        
+        // 记录日志
+        function log(message, type = 'system') {
+            const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits: 3});
+            const logLine = document.createElement('div');
+            logLine.className = `log-line log-${type}`;
+            logLine.dataset.type = type;
+            logLine.textContent = `[${timestamp}] ${message}`;
+            
+            // 检查是否需要自动滚动
+            const logContainer = document.querySelector('.log-container');
+            const shouldScroll = autoScrollCheckbox.checked && 
+                                 (logContainer.scrollTop + logContainer.clientHeight >= logContainer.scrollHeight - 10);
+            
+            logElement.appendChild(logLine);
+            
+            // 如果需要自动滚动，则滚动到底部
+            if (shouldScroll) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            
+            // 应用当前筛选器
+            applyFilter();
+        }
+        
+        // 应用日志筛选
+        function applyFilter() {
+            const allLines = document.querySelectorAll('.log-line');
+            allLines.forEach(line => {
+                if (currentFilter === 'all' || line.dataset.type === currentFilter) {
+                    line.style.display = 'block';
+                } else {
+                    line.style.display = 'none';
+                }
+            });
+        }
+        
+        // 清除日志
+        function clearLog() {
+            logElement.innerHTML = '';
+            log('日志已清除', 'system');
+            receiveCount = 0;
+            sendCount = 0;
+            receiveCountElement.textContent = '0';
+            sendCountElement.textContent = '0';
+        }
+        
+        // 保存日志
+        function saveLog() {
+            const logContent = logElement.textContent;
+            const blob = new Blob([logContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `esp32_serial_log_${new Date().toISOString().replace(/:/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            log('日志已保存到本地', 'system');
+        }
+        
+        // 切换波特率
+        function changeBaudrate() {
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                log('未连接到服务器，无法更改波特率', 'error');
+                return;
+            }
+            
+            const baudrate = baudrateSelect.value;
+            websocket.send(JSON.stringify({
+                type: 'baudrate',
+                value: baudrate
+            }));
+        }
+        
+        // 事件监听
+        document.getElementById('send-btn').addEventListener('click', sendData);
+        document.getElementById('clear-btn').addEventListener('click', clearLog);
+        document.getElementById('save-btn').addEventListener('click', saveLog);
+        baudrateSelect.addEventListener('change', changeBaudrate);
+        
+        // 日志筛选按钮
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // 更新活跃状态
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                // 应用筛选
+                currentFilter = button.dataset.filter;
+                applyFilter();
+            });
+        });
+        
+        // 按Enter发送，Shift+Enter换行
+        sendInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendData();
+            }
+        });
+        
+        // 页面加载时连接WebSocket
+        window.addEventListener('load', connectWebSocket);
+    </script>
+</body>
+</html>
+    
